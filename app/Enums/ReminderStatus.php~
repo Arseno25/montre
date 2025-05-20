@@ -1,0 +1,28 @@
+<?php
+
+namespace App\Enums;
+
+enum ReminderStatus: int
+{
+    case COMPLETED = 1;
+    case PENDING = 2;
+    case CANCELED = 3;
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::COMPLETED => 'Completed',
+            self::PENDING => 'Pending',
+            self::CANCELED => 'Canceled',
+        };
+    }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::COMPLETED => 'success',
+            self::PENDING => 'warning',
+            self::CANCELED => 'danger',
+        };
+    }
+}
