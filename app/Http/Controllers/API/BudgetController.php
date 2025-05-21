@@ -15,33 +15,40 @@ class BudgetController extends Controller
         $query = Budget::where('user_id', $request->user()->id)
             ->with(['category']);
 
-        // Filter by active status
-        if ($request->has('active')) {
-            $now = Carbon::now();
-            $query->where(function ($q) use ($now) {
-                $q->where('start_date', '<=', $now)
-                    ->where('end_date', '>=', $now);
+        // Filter by period
+        if ($request->has('period')) {
+            $query->where('period', $request->period);
+        }
+
+        // Filter by date range
+        if ($request->has('start_date') && $request->has('end_date')) {
+            $query->where(function ($q) use ($request) {
+                $q->whereBetween('start_date', [$request->start_date, $request->end_date])
+                    ->orWhereBetween('end_date', [$request->start_date, $request->end_date]);
             });
         }
 
-        // Filter by category if provided
+        // Filter by category
         if ($request->has('category_id')) {
             $query->where('category_id', $request->category_id);
         }
 
         $budgets = $query->latest()->paginate(10);
 
-        // Calculate progress for each budget
+        // Calculate statistics for each budget
         $budgets->getCollection()->transform(function ($budget) {
-            $budget->spent = $budget->category
+            $spent = $budget->category
                 ->transactions()
+                ->whereBetween('transaction_date', [$budget->start_date, $budget->end_date])
                 ->where('type', 'expense')
-                ->whereBetween('date', [$budget->start_date, $budget->end_date])
                 ->sum('amount');
 
-            $budget->remaining = max(0, $budget->amount - $budget->spent);
-            $budget->progress = $budget->amount > 0 ?
-                min(100, round(($budget->spent / $budget->amount) * 100, 2)) : 0;
+            $budget->statistics = [
+                'spent' => $spent,
+                'remaining' => max(0, $budget->amount - $spent),
+                'progress_percentage' => $budget->amount > 0 ?
+                    min(100, round(($spent / $budget->amount) * 100, 2)) : 0
+            ];
 
             return $budget;
         });
@@ -55,11 +62,11 @@ class BudgetController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'amount' => 'required|numeric|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'period' => 'required|in:daily,weekly,monthly,yearly',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'category_id' => 'required|exists:categories,id',
-            'description' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -87,11 +94,11 @@ class BudgetController extends Controller
 
         $budget = Budget::create([
             'user_id' => $request->user()->id,
-            'amount' => $request->amount,
+            'category_id' => $request->category_id,
+            'period' => $request->period,
             'start_date' => $request->start_date,
             'end_date' => $request->end_date,
-            'category_id' => $request->category_id,
-            'description' => $request->description,
+            'amount' => $request->amount,
         ]);
 
         return response()->json([
@@ -113,24 +120,23 @@ class BudgetController extends Controller
         // Calculate budget statistics
         $spent = $budget->category
             ->transactions()
+            ->whereBetween('transaction_date', [$budget->start_date, $budget->end_date])
             ->where('type', 'expense')
-            ->whereBetween('date', [$budget->start_date, $budget->end_date])
             ->sum('amount');
 
-        $remaining = max(0, $budget->amount - $spent);
-        $progress = $budget->amount > 0 ?
-            min(100, round(($spent / $budget->amount) * 100, 2)) : 0;
-
-        $budget->spent = $spent;
-        $budget->remaining = $remaining;
-        $budget->progress = $progress;
+        $statistics = [
+            'spent' => $spent,
+            'remaining' => max(0, $budget->amount - $spent),
+            'progress_percentage' => $budget->amount > 0 ?
+                min(100, round(($spent / $budget->amount) * 100, 2)) : 0
+        ];
 
         // Get daily spending breakdown
         $dailySpending = $budget->category
             ->transactions()
             ->where('type', 'expense')
-            ->whereBetween('date', [$budget->start_date, $budget->end_date])
-            ->selectRaw('DATE(date) as date, SUM(amount) as total')
+            ->whereBetween('transaction_date', [$budget->start_date, $budget->end_date])
+            ->selectRaw('DATE(transaction_date) as date, SUM(amount) as total')
             ->groupBy('date')
             ->get();
 
@@ -138,6 +144,7 @@ class BudgetController extends Controller
             'status' => true,
             'data' => [
                 'budget' => $budget->load('category'),
+                'statistics' => $statistics,
                 'daily_spending' => $dailySpending
             ]
         ]);
@@ -153,11 +160,11 @@ class BudgetController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'amount' => 'required|numeric|min:0',
+            'category_id' => 'required|exists:categories,id',
+            'period' => 'required|in:daily,weekly,monthly,yearly',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'category_id' => 'required|exists:categories,id',
-            'description' => 'nullable|string|max:255',
+            'amount' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
