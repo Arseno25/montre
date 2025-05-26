@@ -32,7 +32,18 @@ class TransactionResource extends Resource
     {
         return $table
             ->columns([
-                //
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('User'),
+                Tables\Columns\TextColumn::make('category.name')
+                    ->label('Category'),
+                Tables\Columns\TextColumn::make('amount')
+                    ->label('Amount')
+                    ->money('USD'),
+                Tables\Columns\TextColumn::make('transaction_date')
+                    ->label('Transaction Date')
+                    ->dateTime(),
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Description'),
             ])
             ->filters([
                 //
