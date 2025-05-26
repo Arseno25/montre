@@ -70,6 +70,7 @@ class ReminderResource extends Resource
                     ->label('Date'),
                 Tables\Columns\IconColumn::make('is_completed')
                     ->label('Status')
+                    ->boolean()
             ])
             ->filters([
                 //
