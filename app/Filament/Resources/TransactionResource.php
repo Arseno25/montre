@@ -38,7 +38,7 @@ class TransactionResource extends Resource
                     ->label('Category'),
                 Tables\Columns\TextColumn::make('amount')
                     ->label('Amount')
-                    ->money('USD'),
+                    ->money('IDR'),
                 Tables\Columns\TextColumn::make('transaction_date')
                     ->label('Transaction Date')
                     ->dateTime(),
