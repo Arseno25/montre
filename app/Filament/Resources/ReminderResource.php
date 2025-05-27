@@ -71,6 +71,8 @@ class ReminderResource extends Resource
                 Tables\Columns\IconColumn::make('is_completed')
                     ->label('Status')
                     ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
             ])
             ->filters([
                 //
